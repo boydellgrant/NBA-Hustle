@@ -1,0 +1,312 @@
+---
+title: "HustleWorkPt2"
+author: "Grant Boydell"
+date: "`r Sys.Date()`"
+output: pdf_document
+---
+
+## Comparisons Over the Years
+
+```{r}
+hustle24 <- read.csv("pergamehustle2023-24.csv")
+
+hustle24$Hustle.Rating <- hustle_metric(hustle24$Deflections, hustle24$Loose.Balls.Recovered, hustle24$Screen.Assists, hustle24$Contested.Shots, hustle24$Charges.Drawn, hustle24$Box.Outs)
+
+hustle24_by_rating <- hustle24[order(hustle24$Hustle.Rating, decreasing = TRUE), ]
+top_hustlers24 <- data.frame(hustle24_by_rating$Player[1:10], round(hustle24_by_rating$Hustle.Rating[1:10], digits = 2))
+colnames(top_hustlers24) <- c("Player", "Hustle Rating")
+gt(top_hustlers24) %>%
+  tab_header(title = md("**Top Hustlers**"), subtitle = md("2023-2024"))
+```
+
+## Add Percentiles
+
+```{r}
+hustle24$def_percentiles <- 
+  ecdf(hustle24$Deflections)(hustle24$Deflections) * 100
+hustle24$loose_percentiles <-
+  ecdf(hustle24$Loose.Balls.Recovered)(hustle24$Loose.Balls.Recovered) * 100
+hustle24$charges_percentiles <- 
+  ecdf(hustle24$Charges.Drawn)(hustle24$Charges.Drawn) * 100
+hustle24$contests_percentiles <-
+  ecdf(hustle24$Contested.Shots)(hustle24$Contested.Shots) * 100
+hustle24$screen_percentiles <-
+  ecdf(hustle24$Screen.Assists)(hustle24$Screen.Assists) * 100
+hustle24$box_percentiles <- ecdf(hustle24$Box.Outs)(hustle24$Box.Outs) * 100
+```
+
+## Compare Daniels and Camara to 2023-2024 Caruso
+
+```{r}
+caruso_data <- cbind(hustle24$def_percentiles[c(7, 96)], hustle24$loose_percentiles[c(7, 96)], hustle24$screen_percentiles[c(7, 96)], hustle24$charges_percentiles[c(7, 96)], hustle24$contests_percentiles[c(7, 96)], hustle24$box_percentiles[c(7, 96)])
+
+library(fmsb)
+
+radar_data_24 <- as.data.frame(rbind(rep(100, 6), rep(0, 6), caruso_data, percentile_data))
+colnames(radar_data_24) <- c("Deflections", "Loose Balls", "Screen Assists", "Charges", "Contests", "Box Outs")
+rownames(radar_data_24) <- c(1, 2, "Caruso (23-24)", "Green (23-24)", "Camara", "Daniels", "George", "Wembanyama", "Green", "Sengun", "Hart", "Caruso", "Wallace", "Suggs")
+
+radarchart(radar_data_24[c(1, 2, 3, 5), ], pcol = c("darkorange", "black"), pfcol = c(adjustcolor("darkorange", alpha.f = 0.25), adjustcolor("black", alpha.f = 0.25)), plty = 1, plwd = 2, cglcol = "gray", cglty = 1, vlcex = 0.5, title = "Camara vs Caruso (24)")
+radarchart(radar_data_24[c(1, 2, 3, 6), ], pcol = c("darkorange", "darkred"), pfcol = c(adjustcolor("darkorange", alpha.f = 0.25), adjustcolor("darkred", alpha.f = 0.25)), plty = 1, plwd = 2, cglcol = "gray", cglty = 1, vlcex = 0.5, title = "Daniels vs Caruso (24)")
+gt(round(radar_data_24[3:12, ]), rownames_to_stub = TRUE) %>%
+    tab_header(title = md("**Percentile Data**"),
+               subtitle = md("Represents how each player ranks compared to the league in their respective year"))
+```
+
+## Does Hustling Help Improve Minutes?
+
+```{r}
+hustle3624 <- read.csv("per36huslte2023-2024.csv")
+hustle3624$Min.G <- round(hustle3624$Min.G, digits = 1)
+head(hustle3624)
+hustle3624$Hustle.Rating <- hustle_metric(hustle3624$Deflections, hustle3624$Loose.Balls.Recovered, hustle3624$Screen.Assists, hustle3624$Contested.Shots, hustle3624$Charges.Drawn, hustle3624$Box.Outs)
+median(hustle3624$Min.G)
+role_players24 <- hustle3624[hustle3624$Min.G < 26, ]
+role_players24 <- role_players24[role_players24$Min.G > 15, ]
+```
+
+```{r}
+role_by_rating24 <- role_players24[order(role_players24$Hustle.Rating, decreasing = TRUE), ]
+top_role_hustlers24 <- data.frame(role_by_rating24$Player[1:75], role_by_rating24$Min.G[1:75], role_by_rating24$Hustle.Rating[1:75])
+colnames(top_role_hustlers24) <- c("Player", "Minutes", "Hustle Rating")
+top_role_hustlers24 <- top_role_hustlers24[order(top_role_hustlers24$Player), ]
+top_role_hustlers24
+```
+
+```{r}
+indices2 <- which(hustle$Player %in% top_role_hustlers24$Player)
+hustlers24_minutes25 <- hustle[indices2, c(1, 5, 12)]
+hustlers24_minutes25
+```
+
+```{r}
+indices3 <- which(top_role_hustlers24$Player %in% hustlers24_minutes25$Player)
+minutes_change <- hustlers24_minutes25$Min - top_role_hustlers24$Minutes[indices3]
+minutes_change
+```
+
+```{r}
+hustle_v_min <- lm(minutes_change ~ top_role_hustlers24$`Hustle Rating`[indices3])
+summary(hustle_v_min)
+
+plot(x = top_role_hustlers24$`Hustle Rating`[indices3], y = minutes_change, 
+     main = "Does Hustling Improve Minutes?", 
+     xlab = "Per 36 Minutes Hustle Rating 2023-2024", ylab = "Minutes Gained in 2024-2025", 
+     pch = 16, cex = 0.7)
+abline(hustle_v_min, col = "red")
+legend(x = 50, y = 10, legend = "R-Squared = 0.02737    ", cex = 0.6)
+```
+
+```{r}
+prole_players24 <- hustle24[hustle24$Min < 26, ]
+prole_by_rating24 <- prole_players24[order(prole_players24$Hustle.Rating, decreasing = TRUE), ]
+ptop_role_hustlers24 <- data.frame(prole_by_rating24$Player[1:75], prole_by_rating24$Min[1:75], prole_by_rating24$Hustle.Rating[1:75])
+colnames(ptop_role_hustlers24) <- c("Player", "Minutes", "Hustle Rating")
+ptop_role_hustlers24 <- ptop_role_hustlers24[order(ptop_role_hustlers24$Player), ]
+ptop_role_hustlers24
+```
+```{r}
+indices4 <- which(hustle$Player %in% ptop_role_hustlers24$Player)
+phustlers24_minutes25 <- hustle[indices4, c(1, 5, 12)]
+phustlers24_minutes25
+```
+
+```{r}
+indices5 <- which(ptop_role_hustlers24$Player %in% phustlers24_minutes25$Player)
+pminutes_change <- phustlers24_minutes25$Min - ptop_role_hustlers24$Minutes[indices5]
+pminutes_change
+```
+```{r}
+phustle_v_min <- lm(pminutes_change ~ ptop_role_hustlers24$`Hustle Rating`[indices5])
+summary(phustle_v_min)
+
+plot(x = ptop_role_hustlers24$`Hustle Rating`[indices5], y = pminutes_change, 
+     main = "Does Hustling Improve Minutes?", 
+     xlab = "Hustle Rating 2023-2024", ylab = "Minutes Gained in 2024-2025", 
+     pch = 16, cex = 0.7)
+abline(phustle_v_min, col = "red")
+```
+
+## Hustle Rating this year vs Minutes Change
+
+```{r}
+hustle25_v_min <- lm(minutes_change ~ hustlers24_minutes25$Hustle.Rating)
+summary(hustle25_v_min)
+
+plot(x = hustlers24_minutes25$Hustle.Rating, y = minutes_change, 
+     main = "Does Hustling Improve Minutes?", 
+     xlab = "Hustle Rating 2024-2025", ylab = "Minutes Gained in 2024-2025", 
+     pch = 16, cex = 0.7)
+abline(hustle25_v_min, col = "red")
+```
+
+## Combining Hustle Rating vs Minutes Change
+
+```{r}
+summed_ratings_role <- hustlers24_minutes25$Hustle.Rating + top_role_hustlers24$`Hustle Rating`[indices3]
+sum_hustle_v_min <- lm(minutes_change ~ summed_ratings_role)
+summary(sum_hustle_v_min)
+
+plot(x = summed_ratings_role, y = minutes_change, 
+     main = "Does Hustling Improve Minutes?", 
+     xlab = "Combined Hustle Rating 2023-2025", 
+     ylab = "Minutes Gained in 2024-2025", 
+     pch = 16, cex = 0.7)
+abline(sum_hustle_v_min, col = "red")
+```
+
+## 2023-2024
+
+```{r}
+teamhustle24 <- read.csv("hustletotals2023-2024.csv")
+teamhustle24$Hustle.Rating <- hustle_metric(teamhustle24$Deflections, teamhustle24$Loose.Balls.Recovered, teamhustle24$Screen.Assists, teamhustle24$Contested.Shots, teamhustle24$Charges.Drawn, teamhustle24$Box.Outs)
+
+hustle24_v_wins <- lm(teamhustle24$Wins ~ teamhustle24$Hustle.Rating)
+summary(hustle24_v_wins)
+
+plot(x = teamhustle24$Hustle.Rating, y = teamhustle24$Wins, 
+     main = "Does Hustle Impact Wins? (2023-2024)",
+     ylab = "Wins", xlab = "Team Hustle Rating", pch = 16)
+abline(hustle24_v_wins, col = "red")
+legend(x = 85, y = 25, legend = "R-Squared = 0.03955    ", cex = 0.6)
+```
+
+```{r}
+barplot(teamhustle24$Hustle.Rating, names.arg = teamhustle24$TEAM, cex.names = 0.5, 
+        las = 2, ylab = "Team Hustle Ratings", main = "Hustle Ratings (2023-2024)",
+        col = adjustcolor("skyblue", alpha.f = 0.5), border = "skyblue")
+```
+
+## Team Hustle vs. Team Defensive Rating
+
+```{r}
+advanced <- read.csv("advanced2024-205.csv")
+
+hustle_vs_drating <- lm(advanced$DefRtg ~ team_metric)
+summary(hustle_vs_drating)
+
+plot(x = team_metric, y = advanced$DefRtg, main = "Does Hustle Impact Defensive Rating?",
+     ylab = "Defensive Rating", xlab = "Team Hustle Rating", pch = 16)
+abline(hustle_vs_drating, col = "red")
+legend(x = 82, y = 117, legend = "R-Squared = 0.2776    ", cex = 0.8)
+```
+
+## More Comparisons
+
+```{r}
+player_advanced <- read.csv("player_advanced24.csv")
+
+player_advanced <- player_advanced[which(player_advanced$PLAYER %in% hustle$Player), ]
+hustle_new <- hustle[which(hustle$Player %in% player_advanced$PLAYER), ]
+
+player_advanced <- player_advanced[order(player_advanced$PLAYER), ]
+hustle_new <- hustle_new[order(hustle_new$Player), ]
+all.equal(player_advanced$PLAYER, hustle_new$Player)
+
+hustle_v_PIE <- lm(player_advanced$PIE ~ hustle_new$Hustle.Rating)
+summary(hustle_v_PIE)
+
+plot(x = hustle_new$Hustle.Rating, y = player_advanced$PIE, 
+     main = "Does Hustle Affect Player Impact Estimate (PIE)?", 
+     ylab = "PIE", xlab = "Hustle Rating", pch = 16, cex = 0.8)
+abline(hustle_v_PIE, col = "red")
+legend(x = 45, y = 5, legend = "R-squared = 0.1688   ", cex = 0.6)
+```
+
+```{r}
+hustle_v_drtg <- lm(player_advanced$DEFRTG ~ hustle_new$Hustle.Rating)
+summary(hustle_v_drtg)
+
+plot(x = hustle_new$Hustle.Rating, y = player_advanced$DEFRTG, 
+     main = "Is there a correlation between hustle and defense?", 
+     ylab = "Defensive Rating", xlab = "Hustle Rating", pch = 16, cex = 0.8)
+abline(hustle_v_drtg, col = "red")
+```
+
+```{r}
+hustle_v_nrtg <- lm(player_advanced$NETRTG ~ hustle_new$Hustle.Rating)
+summary(hustle_v_nrtg)
+
+plot(x = hustle_new$Hustle.Rating, y = player_advanced$NETRTG, 
+     main = "Is there a correlation between hustle and net rating?", 
+     ylab = "Net Rating", xlab = "Hustle Rating", pch = 16, cex = 0.8)
+abline(hustle_v_nrtg, col = "red")
+```
+
+
+```{r}
+hustle_new$DeflectionsPerMin <- hustle_new$Deflections/hustle_new$Min
+hustle_new$LoosePerMin <- hustle_new$Loose.Balls.Recovered/hustle_new$Min
+hustle_new$ScreensPerMin <- hustle_new$Screen.Assists/hustle_new$Min
+hustle_new$ChargesPerMin <- hustle_new$Charges.Drawn/hustle_new$Min
+hustle_new$ContestsPerMin <- hustle_new$Contested.Shots/hustle_new$Min
+hustle_new$BoxOutsPerMin <- hustle_new$Box.Outs/hustle_new$Min
+
+hustle_new$HustleRatingPerMin <- hustle_metric(hustle_new$DeflectionsPerMin, hustle_new$LoosePerMin, hustle_new$ScreensPerMin, hustle_new$ContestsPerMin, hustle_new$ChargesPerMin, hustle_new$BoxOutsPerMin)
+```
+
+```{r}
+hustle_by_perminrating <- hustle_new[order(hustle_new$HustleRatingPerMin, decreasing = TRUE), ]
+colnames(hustle_by_perminrating)[6:11] <- c("Screen Assists", "Deflections", "Loose Balls Recovered", "Charges Drawn", "Contested Shots", "Box Outs")
+top_permin_hustlers <- data.frame(hustle_by_perminrating$Player[1:10], round(hustle_by_perminrating$HustleRatingPerMin[1:10], digits = 2))
+colnames(top_permin_hustlers) <- c("Player", "Hustle Rating")
+gt(top_permin_hustlers) %>%
+  tab_header(title = md("**Top Hustlers**"), subtitle = md("Using Per Minute Stats (2024-2025)"))
+```
+
+```{r}
+perminhustle_v_PIE <- lm(player_advanced$PIE ~ hustle_new$HustleRatingPerMin)
+summary(perminhustle_v_PIE)
+
+plot(x = hustle_new$HustleRatingPerMin, y = player_advanced$PIE, 
+     main = "Does Hustle Impact PIE?",
+     ylab = "PIE", xlab = "Hustle Rating (Per Min)", pch = 16)
+abline(perminhustle_v_PIE, col = "red")
+legend(x = 55, y = 5, legend = "R-Squared = 0.01517   ", cex = 0.6)
+```
+
+```{r}
+phustle_v_drtg <- lm(player_advanced$DEFRTG ~ hustle_new$Hustle.Rating)
+summary(phustle_v_drtg)
+
+plot(x = hustle_new$Hustle.Rating, y = player_advanced$DEFRTG, 
+     main = "Does Hustle Impact Player Defensive Rating?",
+     ylab = "Defensive Rating", xlab = "Hustle Rating", pch = 16)
+abline(phustle_v_drtg, col = "red")
+legend(x = , y = , legend = "R-Squared =    ", cex = 0.6)
+```
+
+```{r}
+perminhustle_v_drtg <- lm(player_advanced$DEFRTG ~ hustle_new$HustleRatingPerMin)
+summary(perminhustle_v_drtg)
+
+plot(x = hustle_new$HustleRatingPerMin, y = player_advanced$DEFRTG, 
+     main = "Does Hustle Impact Player Defensive Rating?",
+     ylab = "Defensive Rating", xlab = "Hustle Rating (Per Min)", pch = 16)
+abline(perminhustle_v_drtg, col = "red")
+legend(x = 55, y = 120, legend = "R-Squared = 0.1264    ", cex = 0.7)
+```
+
+```{r}
+equal_hustle_metric <- function(deflections, loose, screens, contests, charges, boxouts){
+  def <- deflections/max(deflections)
+  lbr <- loose/max(loose)
+  sa <- screens/max(screens)
+  cs <- contests/max(contests)
+  cd <- charges/max(charges)
+  bo <- boxouts/max(boxouts)
+  metric <- (lbr*(1/6)) + (def*(1/6)) + (cd*(1/6)) + (bo*(1/6)) + (cs*(1/6)) + (sa*(1/6))
+  metric * 100
+}
+
+hustle$EqualHustleRating <- equal_hustle_metric(hustle$Deflections, hustle$Loose.Balls.Recovered, hustle$Screen.Assists, hustle$Contested.Shots, hustle$Charges.Drawn, hustle$Box.Outs)
+
+hustle_by_equal <- hustle[order(hustle$EqualHustleRating, decreasing = TRUE), ]
+top_equal <- data.frame(hustle_by_equal$Player[1:10], round(hustle_by_equal$EqualHustleRating[1:10], digits = 2))
+colnames(top_equal) <- c("Player", "Hustle Rating")
+gt(top_equal) %>%
+  tab_header(title = md("**Top Hustlers**"), subtitle = md("Each Stat Valued Equally (2024-2025)"))
+```
+
+
+
